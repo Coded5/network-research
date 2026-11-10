@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "name": "Log-Distance Propagation",
+  "environment": {"width_m": 500, "height_m": 500},
+  "transmitters": [
+    {
+      "id": "tx_1", "name": "Base station", "position": [100, 250, 10],
+      "frequency_hz": 2400000000, "power_dbm": 20, "antenna_gain_dbi": 0
+    }
+  ],
+  "receivers": [
+    {"id": "rx_1", "position": [200, 250, 1.5], "sensitivity_dbm": -90},
+    {"id": "rx_2", "position": [400, 250, 1.5], "sensitivity_dbm": -90}
+  ],
+  "propagation": {
+    "model": "log_distance",
+    "parameters": {"exponent": 3, "reference_distance_m": 1, "reference_loss_db": 46.6777}
+  },
+  "sampling": {"resolution_m": 5, "receiver_height_m": 1.5},
+  "simulation": {"duration_s": 1, "seed": 42}
+}
