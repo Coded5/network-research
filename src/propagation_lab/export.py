@@ -21,6 +21,7 @@ def result_zip(result: SimulationResult) -> bytes:
         archive.writestr("receiver_results.csv", result.links.to_csv(index=False))
         archive.writestr("coverage_grid.csv", result.coverage.to_csv(index=False))
         archive.writestr("distance_curves.csv", result.curves.to_csv(index=False))
+        archive.writestr("paths.csv", result.paths.to_csv(index=False))
         archive.writestr("heatmap.html", figure.to_html(include_plotlyjs=True, full_html=True))
     return buffer.getvalue()
 

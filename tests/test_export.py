@@ -33,7 +33,7 @@ def test_package_preserves_snapshot_metadata_and_numerical_results():
     with zipfile.ZipFile(io.BytesIO(result_zip(result))) as archive:
         assert set(archive.namelist()) == {
             "scenario.json", "metadata.json", "receiver_results.csv",
-            "coverage_grid.csv", "distance_curves.csv", "heatmap.html",
+            "coverage_grid.csv", "distance_curves.csv", "paths.csv", "heatmap.html",
         }
         assert Scenario.model_validate_json(archive.read("scenario.json")) == result.scenario
         assert json.loads(archive.read("metadata.json")) == result.metadata

@@ -1,6 +1,7 @@
 import subprocess
 import sys
 
+import numpy as np
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
@@ -166,3 +167,105 @@ def test_map_move_changes_widget_revision_so_stale_coordinates_cannot_revert_it(
     assert state["scenario"]["transmitters"][0]["position"][:2] == [25.0, 30.0]
     assert state["node_revision"] == 1
     assert "x_1_tx_1" not in state  # new widget key loads committed map position
+
+
+def test_no_path_heatmap_masks_infinite_received_power():
+    scenario = default_scenario()
+    coverage = pd.DataFrame(
+        [
+            ("friis", "tx_1", 10, 20, 1.5, 3, float("-inf"), float("inf")),
+            ("friis", "tx_2", 10, 20, 1.5, 3, float("-inf"), float("inf")),
+        ],
+        columns=[
+            "model",
+            "tx_id",
+            "x_m",
+            "y_m",
+            "z_m",
+            "distance_m",
+            "rx_power_dbm",
+            "path_loss_db",
+        ],
+    )
+    fig = heatmap_figure(scenario, coverage)
+    assert np.isnan(fig.data[0].z[0][0])
+
+
+def test_obstacle_create_edit_delete_and_import_roundtrip():
+    import json
+    from pathlib import Path
+
+    app = AppTest.from_file(Path(__file__).parents[1] / "app.py").run()
+    next(button for button in app.button if button.label == "＋ Wall").click().run()
+    assert not app.exception
+    assert app.session_state["scenario"]["obstacles"][0]["kind"] == "wall"
+    name = next(item for item in app.text_input if item.label == "Name")
+    name.set_value("North wall").run()
+    assert app.session_state["scenario"]["obstacles"][0]["name"] == "North wall"
+    next(item for item in app.number_input if item.label == "Attenuation · dB").set_value(11).run()
+    assert app.session_state["scenario"]["obstacles"][0]["attenuation_db"] == 11
+    dumped = json.dumps(app.session_state["scenario"])
+    app.get("file_uploader")[0].upload("scenario.json", dumped.encode(), "application/json").run()
+    next(button for button in app.button if button.label == "Import scenario").click().run()
+    assert app.session_state["scenario"]["obstacles"][0]["name"] == "North wall"
+    assert app.session_state["scenario"]["obstacles"][0]["attenuation_db"] == 11
+    next(button for button in app.button if button.label.startswith("obstacle_1  ·")).click().run()
+    next(button for button in app.button if button.label == "Delete selected").click().run()
+    assert app.session_state["scenario"]["obstacles"] == []
+
+
+def test_rectangle_obstacle_can_edit_geometry_and_material():
+    from pathlib import Path
+
+    app = AppTest.from_file(Path(__file__).parents[1] / "app.py").run()
+    next(button for button in app.button if button.label == "＋ Rectangle").click().run()
+    assert not app.exception
+    assert app.session_state["scenario"]["obstacles"][0]["kind"] == "rectangle"
+    next(item for item in app.number_input if item.label == "Start x · m").set_value(120).run()
+    obstacle = app.session_state["scenario"]["obstacles"][0]
+    assert obstacle["start"][0] == 120
+    next(item for item in app.number_input if item.label == "Attenuation · dB").set_value(9).run()
+    assert app.session_state["scenario"]["obstacles"][0]["attenuation_db"] == 9
+    assert not app.exception
+
+
+def test_invalid_obstacle_draft_blocks_run_until_geometry_is_fixed():
+    from pathlib import Path
+
+    app = AppTest.from_file(Path(__file__).parents[1] / "app.py").run()
+    next(button for button in app.button if button.label == "＋ Rectangle").click().run()
+    next(item for item in app.number_input if item.label == "End x · m").set_value(200).run()
+    assert next(button for button in app.button if button.label == "Run comparison").disabled
+    next(item for item in app.number_input if item.label == "End x · m").set_value(300).run()
+    assert not next(button for button in app.button if button.label == "Run comparison").disabled
+    assert not app.exception
+
+
+def test_stored_reflection_paths_render_with_pandas_index(monkeypatch):
+    import streamlit as st
+
+    from propagation_lab.ui import _draw_stored_paths
+
+    paths = pd.DataFrame([{
+        "tx_id": "tx_1", "rx_id": "rx_1", "kind": "reflected", "obstacle_id": "mirror",
+        "bounce_x_m": 150.0, "bounce_y_m": 200.0,
+    }])
+    rendered = []
+    monkeypatch.setattr(st, "plotly_chart", lambda figure, **kwargs: rendered.append(figure))
+    _draw_stored_paths(default_scenario(), paths)
+    path = rendered[0].data[-1]
+    assert path.x == (100, 150, 200)
+    assert path.y == (250, 200, 250)
+    assert path.showlegend is True
+
+
+def test_translate_obstacle_exits_placement_mode():
+    from pathlib import Path
+
+    app = AppTest.from_file(Path(__file__).parents[1] / "app.py").run()
+    next(button for button in app.button if button.label == "＋ Wall").click().run()
+    next(radio for radio in app.radio if radio.label == "Map action").set_value("Place wall").run()
+    next(button for button in app.button if button.label == "Translate obstacle").click().run()
+    assert not app.exception
+    mode = next(radio for radio in app.radio if radio.label == "Map action").value
+    assert mode == "Select / move"

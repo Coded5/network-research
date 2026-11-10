@@ -71,7 +71,7 @@ def test_run_metadata_shapes_and_coordinate_updates(small_scenario):
         k: v for k, v in again.metadata.items() if k not in {"started_at", "completed_at"}
     }
     assert first.coverage.shape == (9, 8)
-    assert first.links.shape == (1, 7)
+    assert first.links.shape == (1, 9)
     assert first.curves.shape == (120, 5)
     moved_rx = small_scenario.model_copy(deep=True)
     moved_rx.receivers[0].position = (50, 50, 1)
@@ -100,6 +100,7 @@ def test_run_isolated_executes_worker_process(small_scenario):
     assert isolated.coverage.equals(direct.coverage)
     assert isolated.links.equals(direct.links)
     assert isolated.curves.equals(direct.curves)
+    assert isolated.paths.equals(direct.paths)
 
 
 def test_comparison_preserves_each_transmitter_and_link_metrics(small_scenario):

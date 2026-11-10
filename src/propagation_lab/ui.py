@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from propagation_lab.scenario import (
     Friis,
     LogDistance,
+    Obstacle,
     Receiver,
     Scenario,
     Transmitter,
@@ -29,14 +30,18 @@ def heatmap_figure(scenario: Scenario, coverage, tx_id: str | None = None) -> go
     fig = go.Figure()
     if len(data):
         xs, ys = sorted(data.x_m.unique()), sorted(data.y_m.unique())
-        power = data.pivot(index="y_m", columns="x_m", values="rx_power_dbm").reindex(
-            index=ys, columns=xs
+        power = (
+            data.pivot(index="y_m", columns="x_m", values="rx_power_dbm")
+            .replace([-np.inf, np.inf], np.nan)
+            .reindex(index=ys, columns=xs)
         )
         custom = np.empty((*power.shape, 4), dtype=object)
         for index, column in enumerate(["rx_power_dbm", "path_loss_db", "distance_m", "tx_id"]):
-            custom[:, :, index] = data.pivot(index="y_m", columns="x_m", values=column).reindex(
-                index=ys, columns=xs
-            ).to_numpy()
+            custom[:, :, index] = (
+                data.pivot(index="y_m", columns="x_m", values=column)
+                .reindex(index=ys, columns=xs)
+                .to_numpy()
+            )
         fig.add_trace(
             go.Heatmap(
                 x=xs,
@@ -110,6 +115,48 @@ def _add_nodes(fig: go.Figure, scenario: Scenario) -> None:
                 )
             )
 
+    for index, obstacle in enumerate(scenario.obstacles):
+        x0, y0 = obstacle.start
+        x1, y1 = obstacle.end
+        if obstacle.kind == "rectangle":
+            xs, ys = [x0, x1, x1, x0, x0], [y0, y0, y1, y1, y0]
+        else:
+            xs, ys = [x0, x1], [y0, y1]
+        fig.add_trace(
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="lines",
+                line={"color": "#6c4d7d", "width": 4,
+                      "dash": "solid" if obstacle.blocks else "dot"},
+                name=f"{obstacle.kind} · {obstacle.id}",
+                customdata=[["OBSTACLE", obstacle.id]] * len(xs),
+                hovertemplate=(
+                    f"{obstacle.kind} · {obstacle.id}<br>Height: {obstacle.height_m:g} m<br>"
+                    + ("Transmission blocked" if obstacle.blocks
+                       else f"Transmission loss: {obstacle.attenuation_db:g} dB")
+                    + ("<br>Reflection disabled" if obstacle.reflection_loss_db is None
+                       else f"<br>Reflection loss: {obstacle.reflection_loss_db:g} dB")
+                    + "<extra></extra>"
+                ),
+                showlegend=False,
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[(x0 + x1) / 2],
+                y=[(y0 + y1) / 2],
+                mode="markers+text",
+                text=[obstacle.id],
+                textposition="top center",
+                marker={"size": 13, "color": "#6c4d7d", "symbol": "square"},
+                customdata=[["OBSTACLE", obstacle.id]],
+                name="Obstacle",
+                showlegend=index == 0,
+                hovertemplate=f"Obstacle · {obstacle.id}<extra></extra>",
+            )
+        )
+
 
 def _scenario() -> Scenario:
     import streamlit as st
@@ -160,11 +207,15 @@ def _edit_properties(scenario: Scenario, selected: tuple[str, str] | None) -> No
     with st.expander("Scenario & model", expanded=selected is None):
         name = st.text_input("Scenario name", scenario.name, key=prefix + "name")
         width = st.number_input(
-            "Map width · m", min_value=0.0, value=float(scenario.environment.width_m),
+            "Map width · m",
+            min_value=0.0,
+            value=float(scenario.environment.width_m),
             key=prefix + "width",
         )
         height = st.number_input(
-            "Map height · m", min_value=0.0, value=float(scenario.environment.height_m),
+            "Map height · m",
+            min_value=0.0,
+            value=float(scenario.environment.height_m),
             key=prefix + "height",
         )
         model = st.selectbox(
@@ -219,7 +270,9 @@ def _edit_properties(scenario: Scenario, selected: tuple[str, str] | None) -> No
             }
             st.caption("Reference loss is a fixed user value; it does not vary with frequency.")
         resolution = st.number_input(
-            "Grid spacing · m", min_value=0.0, value=float(scenario.sampling.resolution_m),
+            "Grid spacing · m",
+            min_value=0.0,
+            value=float(scenario.sampling.resolution_m),
             key=prefix + "resolution",
         )
         rx_height = st.number_input(
@@ -230,11 +283,17 @@ def _edit_properties(scenario: Scenario, selected: tuple[str, str] | None) -> No
             key=prefix + "rx_height",
         )
         duration = st.number_input(
-            "Duration · s", min_value=0.0, value=float(scenario.simulation.duration_s),
+            "Duration · s",
+            min_value=0.0,
+            value=float(scenario.simulation.duration_s),
             key=prefix + "duration",
         )
         seed = st.number_input(
-            "Seed", min_value=1, max_value=2**32 - 1, value=int(scenario.simulation.seed), step=1,
+            "Seed",
+            min_value=1,
+            max_value=2**32 - 1,
+            value=int(scenario.simulation.seed),
+            step=1,
             key=prefix + "seed",
         )
         st.caption(
@@ -264,6 +323,97 @@ def _edit_properties(scenario: Scenario, selected: tuple[str, str] | None) -> No
 
     if selected:
         kind, node_id = selected
+        if kind == "OBSTACLE":
+            obstacle = next((item for item in scenario.obstacles if item.id == node_id), None)
+            if obstacle is not None:
+                widget_id = f"{st.session_state.get('node_revision', 0)}_{node_id}"
+                with st.expander(f"Obstacle · {node_id}", expanded=True):
+                    data = {
+                        "id": st.text_input("ID", obstacle.id, key="obstacle_id_" + widget_id),
+                        "name": st.text_input(
+                            "Name", obstacle.name, key="obstacle_name_" + widget_id
+                        ),
+                        "kind": st.selectbox(
+                            "Obstacle kind",
+                            ["wall", "rectangle"],
+                            index=0 if obstacle.kind == "wall" else 1,
+                            key="obstacle_kind_" + widget_id,
+                        ),
+                        "start": (
+                            st.number_input(
+                                "Start x · m",
+                                0.0,
+                                float(scenario.environment.width_m),
+                                obstacle.start[0],
+                                key="obstacle_x0_" + widget_id,
+                            ),
+                            st.number_input(
+                                "Start y · m",
+                                0.0,
+                                float(scenario.environment.height_m),
+                                obstacle.start[1],
+                                key="obstacle_y0_" + widget_id,
+                            ),
+                        ),
+                        "end": (
+                            st.number_input(
+                                "End x · m",
+                                0.0,
+                                float(scenario.environment.width_m),
+                                obstacle.end[0],
+                                key="obstacle_x1_" + widget_id,
+                            ),
+                            st.number_input(
+                                "End y · m",
+                                0.0,
+                                float(scenario.environment.height_m),
+                                obstacle.end[1],
+                                key="obstacle_y1_" + widget_id,
+                            ),
+                        ),
+                        "height_m": st.number_input(
+                            "Obstacle height · m",
+                            0.0,
+                            10000.0,
+                            obstacle.height_m,
+                            key="obstacle_h_" + widget_id,
+                        ),
+                        "blocks": st.checkbox(
+                            "Blocks transmission",
+                            obstacle.blocks,
+                            key="obstacle_blocks_" + widget_id,
+                        ),
+                        "attenuation_db": st.number_input(
+                            "Attenuation · dB",
+                            0.0,
+                            300.0,
+                            obstacle.attenuation_db,
+                            key="obstacle_atten_" + widget_id,
+                        ),
+                    }
+                    reflected = st.checkbox(
+                        "Enable reflection",
+                        obstacle.reflection_loss_db is not None,
+                        key="obstacle_reflect_" + widget_id,
+                    )
+                    reflection_loss = obstacle.reflection_loss_db
+                    loss = st.number_input(
+                        "Reflection loss · dB",
+                        0.0,
+                        300.0,
+                        6.0 if reflection_loss is None else reflection_loss,
+                        key="obstacle_loss_" + widget_id,
+                        disabled=not reflected,
+                    )
+                    data["reflection_loss_db"] = loss if reflected else None
+                    if _update_obstacle(node_id, data):
+                        st.rerun()
+                if st.button("Translate obstacle", key="obstacle_move_" + widget_id):
+                    st.session_state.obstacle_translate = node_id
+                    st.session_state.map_action = "Select / move"
+                    _reset_map_selection()
+                    st.info("Click map to translate obstacle.")
+            return
         widget_id = f"{st.session_state.get('node_revision', 0)}_{node_id}"
         nodes = scenario.transmitters if kind == "TX" else scenario.receivers
         node = next((n for n in nodes if n.id == node_id), None)
@@ -353,7 +503,12 @@ def main() -> None:
     with left:
         st.subheader("Scenario objects")
         st.caption(scenario.name)
-        for kind, nodes in (("TX", scenario.transmitters), ("RX", scenario.receivers)):
+        object_groups = (
+            ("TX", scenario.transmitters),
+            ("RX", scenario.receivers),
+            ("OBSTACLE", scenario.obstacles),
+        )
+        for kind, nodes in object_groups:
             st.markdown(f"**{kind} · {len(nodes)}**")
             for node in nodes:
                 if st.button(
@@ -362,6 +517,7 @@ def main() -> None:
                     use_container_width=True,
                 ):
                     st.session_state.selected = (kind, node.id)
+                    _reset_map_selection()
                     st.rerun()
         col_a, col_b = st.columns(2)
         if col_a.button(
@@ -372,14 +528,22 @@ def main() -> None:
         if col_b.button("＋ RX", use_container_width=True, disabled=len(scenario.receivers) >= 500):
             if _append_node("RX", scenario):
                 st.rerun()
+        if len(scenario.obstacles) < 32 and st.button("＋ Wall", use_container_width=True):
+            if _append_obstacle("wall", scenario):
+                st.rerun()
+        if len(scenario.obstacles) < 32 and st.button("＋ Rectangle", use_container_width=True):
+            if _append_obstacle("rectangle", scenario):
+                st.rerun()
         if st.session_state.selected:
             kind, node_id = st.session_state.selected
             if st.button("Delete selected", type="secondary", use_container_width=True):
                 values = scenario.model_dump(mode="python")
-                key = "transmitters" if kind == "TX" else "receivers"
+                key = {"TX": "transmitters", "RX": "receivers", "OBSTACLE": "obstacles"}[kind]
                 values[key] = [n for n in values[key] if n["id"] != node_id]
                 _save(Scenario.model_validate(values))
                 st.session_state.selected = None
+                st.session_state.pop("obstacle_start", None)
+                st.session_state.pop("obstacle_translate", None)
                 st.session_state.node_revision = st.session_state.get("node_revision", 0) + 1
                 _reset_map_selection()
                 st.rerun()
@@ -400,6 +564,8 @@ def main() -> None:
                 imported = Scenario.model_validate_json(uploaded.getvalue())
                 _save(imported)
                 st.session_state.selected = None
+                st.session_state.pop("obstacle_start", None)
+                st.session_state.pop("obstacle_translate", None)
                 st.session_state.pop("draft_error", None)
                 st.session_state.pop("draft_error_kind", None)
                 st.session_state.node_revision = st.session_state.get("node_revision", 0) + 1
@@ -421,10 +587,15 @@ def main() -> None:
         st.subheader("Map")
         mode = st.radio(
             "Map action",
-            ["Select / move", "Place TX", "Place RX"],
+            ["Select / move", "Place TX", "Place RX", "Place wall", "Place rectangle"],
             horizontal=True,
             label_visibility="collapsed",
+            key="map_action",
         )
+        if st.session_state.get("previous_map_mode") != mode:
+            st.session_state.pop("obstacle_start", None)
+            st.session_state.previous_map_mode = mode
+            _reset_map_selection()
         is_current = st.session_state.get("result_scenario") == scenario.model_dump(mode="json")
         result = st.session_state.get("result") if is_current else None
         if result:
@@ -462,7 +633,20 @@ def main() -> None:
         if points:
             point = points[-1]
             meta = point.get("customdata") or []
-            if mode.startswith("Place"):
+            if mode in ("Place wall", "Place rectangle"):
+                xy = (float(point.get("x", 0)), float(point.get("y", 0)))
+                pending = st.session_state.get("obstacle_start")
+                if pending is None:
+                    st.session_state.obstacle_start = xy
+                    _reset_map_selection()
+                    st.rerun()
+                else:
+                    obstacle_id = _append_obstacle(mode[6:], scenario, pending, xy)
+                    st.session_state.pop("obstacle_start", None)
+                    _reset_map_selection()
+                    if obstacle_id:
+                        st.rerun()
+            elif mode.startswith("Place"):
                 kind = mode[-2:]
                 node_id = _append_node(kind, scenario, (point.get("x", 0), point.get("y", 0)))
                 if node_id is not None:
@@ -470,21 +654,38 @@ def main() -> None:
                     st.session_state.node_revision = st.session_state.get("node_revision", 0) + 1
                     _reset_map_selection()
                     st.rerun()
-            elif len(meta) >= 2 and meta[0] in ("TX", "RX"):
+            elif len(meta) >= 2 and meta[0] in ("TX", "RX", "OBSTACLE"):
+                if st.session_state.get("selected") != (meta[0], meta[1]):
+                    st.session_state.pop("obstacle_translate", None)
                 st.session_state.selected = (meta[0], meta[1])
                 if meta[0] == "TX":
                     st.session_state.pending_coverage_tx = meta[1]
                     st.session_state.metric_tx = meta[1]
-                else:
+                elif meta[0] == "RX":
                     st.session_state.metric_rx = meta[1]
                 _reset_map_selection()
                 st.rerun()
             elif st.session_state.selected and "x" in point and "y" in point:
-                if _move_selected(scenario, st.session_state.selected, point["x"], point["y"]):
+                if st.session_state.get("obstacle_translate") == st.session_state.selected[1]:
+                    if _move_obstacle(
+                        scenario, st.session_state.selected[1], point["x"], point["y"]
+                    ):
+                        st.session_state.pop("obstacle_translate", None)
+                        _reset_map_selection()
+                        st.rerun()
+                elif st.session_state.get("obstacle_translate"):
+                    st.session_state.pop("obstacle_translate", None)
+                elif st.session_state.selected[0] != "OBSTACLE" and _move_selected(
+                    scenario, st.session_state.selected, point["x"], point["y"]
+                ):
                     _reset_map_selection()
                     st.rerun()
+        if st.session_state.get("obstacle_start") is not None:
+            st.info("First corner selected. Click a second map target to finish the object.")
         if not result:
             st.caption("No computed heatmap yet. Muted map dots are placement targets only.")
+        elif scenario.obstacles:
+            st.caption("Transparent cells have no valid direct or single-bounce path.")
         draft_error = st.session_state.get("draft_error")
         if draft_error:
             st.warning("Run comparison is disabled until invalid properties are corrected.")
@@ -523,7 +724,11 @@ def main() -> None:
         model = scenario.propagation.model
         model_metadata = result.metadata.get("models", {}).get(model, {})
         with st.expander("Model metadata & parameters"):
-            st.json(model_metadata)
+            st.json({
+                "base_model": model_metadata,
+                "obstacle_model": result.metadata.get("obstacle_model"),
+                "native_build": result.metadata.get("native_build"),
+            })
         links = result.links[result.links.model == model]
         if scenario.transmitters and scenario.receivers and len(links):
             tx = st.selectbox("Transmitter", [n.id for n in scenario.transmitters], key="metric_tx")
@@ -531,14 +736,38 @@ def main() -> None:
             link = links[(links.tx_id == tx) & (links.rx_id == rx)]
             if len(link):
                 row = link.iloc[0]
-                cols = st.columns(4)
+                no_path = row.get("status") == "no_path"
+                cols = st.columns(6)
                 for col, label, value, unit in zip(
                     cols,
-                    ("Distance", "RSS", "Path loss", "Link margin"),
-                    (row.distance_m, row.rx_power_dbm, row.path_loss_db, row.link_margin_db),
-                    ("m", "dBm", "dB", "dB"),
+                    ("Distance", "RSS", "Path loss", "Link margin", "Status", "Paths"),
+                    (
+                        row.distance_m,
+                        "No path" if no_path else row.rx_power_dbm,
+                        "No path" if no_path else row.path_loss_db,
+                        "No path" if no_path else row.link_margin_db,
+                        row.get("status", "—"),
+                        row.get("path_count", "—"),
+                    ),
+                    ("m", "dBm", "dB", "dB", "", ""),
                 ):
-                    col.metric(label, f"{value:.2f} {unit}")
+                    display = (
+                        f"{value:.2f} {unit}"
+                        if isinstance(value, (int, float, np.number))
+                        else str(value)
+                    )
+                    col.metric(label, display)
+                paths = getattr(result, "paths", None)
+                if paths is not None:
+                    selected_paths = paths[
+                        (paths.model == model) & (paths.tx_id == tx) & (paths.rx_id == rx)
+                    ]
+                    st.caption("Stored propagation paths")
+                    st.dataframe(selected_paths, use_container_width=True, hide_index=True)
+                    if len(selected_paths) and st.checkbox(
+                        "Draw stored paths on map", key="draw_paths"
+                    ):
+                        _draw_stored_paths(scenario, selected_paths)
         curves = result.curves
         if len(curves):
             chosen_tx = st.selectbox(
@@ -548,13 +777,18 @@ def main() -> None:
             for model_name, group in curves[curves.tx_id == chosen_tx].groupby("model"):
                 fig.add_scatter(
                     x=group.distance_m,
-                    y=group.rx_power_dbm,
+                    y=group.rx_power_dbm.replace([-np.inf, np.inf], np.nan),
                     mode="lines",
                     name=model_name,
                     hovertemplate="%{x:.1f} m · %{y:.2f} dBm<extra>%{fullData.name}</extra>",
                 )
+            curve_title = (
+                "Received power vs fixed-height x-transect · obstacles"
+                if scenario.obstacles
+                else "Received power vs distance · model comparison"
+            )
             fig.update_layout(
-                title="Received power vs distance · model comparison",
+                title=curve_title,
                 xaxis_title="Distance (m)",
                 yaxis_title="Received power (dBm)",
                 height=360,
@@ -562,6 +796,17 @@ def main() -> None:
                 font={"color": "#172b35"},
             )
             st.plotly_chart(fig, use_container_width=True)
+            if scenario.obstacles:
+                st.caption(
+                    "Obstacle curves use a fixed-height x-transect from each TX, "
+                    "not an isotropic distance sweep."
+                )
+        if scenario.obstacles:
+            st.caption(
+                "Obstacle loss is fixed per object traversal; reflections use "
+                "single-bounce vertical faces, "
+                "no rooftops, and incoherent power sums per TX (no interference)."
+            )
     elif st.session_state.get("result"):
         st.info("Scenario changed; previous results are stale. Run comparison again.")
 
@@ -572,7 +817,9 @@ def _append_node(
     values = scenario.model_dump(mode="python")
     nodes_key = "transmitters" if kind == "TX" else "receivers"
     prefix = kind.lower()
-    occupied = {n["id"] for n in [*values["transmitters"], *values["receivers"]]}
+    occupied = {
+        n["id"] for n in [*values["transmitters"], *values["receivers"], *values["obstacles"]]
+    }
     i = 1
     while f"{prefix}_{i}" in occupied:
         i += 1
@@ -596,6 +843,8 @@ def _append_node(
 
 def _move_selected(scenario: Scenario, selected: tuple[str, str], x: float, y: float) -> bool:
     kind, node_id = selected
+    if kind == "OBSTACLE":
+        return _move_obstacle(scenario, node_id, x, y)
     nodes = scenario.transmitters if kind == "TX" else scenario.receivers
     node = next((n for n in nodes if n.id == node_id), None)
     if node:
@@ -612,6 +861,112 @@ def _move_selected(scenario: Scenario, selected: tuple[str, str], x: float, y: f
 
             st.error(f"Cannot move node: {exc}")
     return False
+
+
+def _append_obstacle(kind: str, scenario: Scenario, start=None, end=None) -> str | None:
+    import streamlit as st
+
+    values = scenario.model_dump(mode="python")
+    occupied = {
+        item["id"] for item in [*values["transmitters"], *values["receivers"], *values["obstacles"]]
+    }
+    i = 1
+    while f"obstacle_{i}" in occupied:
+        i += 1
+    sx, sy = start or (scenario.environment.width_m * 0.4, scenario.environment.height_m * 0.5)
+    ex, ey = end or (scenario.environment.width_m * 0.6, scenario.environment.height_m * 0.5)
+    if kind == "rectangle" and start is None:
+        ex, ey = scenario.environment.width_m * 0.6, scenario.environment.height_m * 0.6
+    try:
+        obj = Obstacle(id=f"obstacle_{i}", kind=kind, start=(sx, sy), end=(ex, ey))
+        values["obstacles"].append(obj.model_dump(mode="python"))
+        _save(Scenario.model_validate(values))
+        st.session_state.selected = ("OBSTACLE", obj.id)
+        st.session_state.node_revision = st.session_state.get("node_revision", 0) + 1
+        return obj.id
+    except (ValidationError, ValueError) as exc:
+        st.error(f"Cannot add obstacle; check map bounds and material budget: {exc}")
+        return None
+
+
+def _update_obstacle(obstacle_id: str, data: dict) -> bool:
+    import streamlit as st
+
+    values = _scenario().model_dump(mode="python")
+    for index, obstacle in enumerate(values["obstacles"]):
+        if obstacle["id"] == obstacle_id:
+            values["obstacles"][index] = data
+            break
+    try:
+        updated = Scenario.model_validate(values)
+        if updated.model_dump(mode="json") == _scenario().model_dump(mode="json"):
+            if st.session_state.get("draft_error_kind") == "obstacle":
+                st.session_state.pop("draft_error", None)
+                st.session_state.pop("draft_error_kind", None)
+            return False
+        _save(updated)
+        if data["id"] != obstacle_id:
+            st.session_state.selected = ("OBSTACLE", data["id"])
+        st.session_state.node_revision = st.session_state.get("node_revision", 0) + 1
+        if st.session_state.get("draft_error_kind") == "obstacle":
+            st.session_state.pop("draft_error", None)
+            st.session_state.pop("draft_error_kind", None)
+        return True
+    except (ValidationError, ValueError) as exc:
+        st.session_state.draft_error_kind = "obstacle"
+        st.session_state.draft_error = f"Correct obstacle properties before running: {exc}"
+        st.error(st.session_state.draft_error)
+        return False
+
+
+def _move_obstacle(scenario: Scenario, obstacle_id: str, x: float, y: float) -> bool:
+    obstacle = next((obj for obj in scenario.obstacles if obj.id == obstacle_id), None)
+    if obstacle is None:
+        return False
+    dx = x - (obstacle.start[0] + obstacle.end[0]) / 2
+    dy = y - (obstacle.start[1] + obstacle.end[1]) / 2
+    return _update_obstacle(
+        obstacle_id,
+        obstacle.model_dump(mode="python")
+        | {
+            "start": (obstacle.start[0] + dx, obstacle.start[1] + dy),
+            "end": (obstacle.end[0] + dx, obstacle.end[1] + dy),
+        },
+    )
+
+
+def _draw_stored_paths(scenario: Scenario, paths) -> None:
+    """Draw only geometries returned by the native adapter."""
+    txs = {node.id: node for node in scenario.transmitters}
+    rxs = {node.id: node for node in scenario.receivers}
+    fig = go.Figure()
+    _map_layout(fig, scenario, "Stored propagation paths")
+    _add_nodes(fig, scenario)
+    for index, path in paths.iterrows():
+        tx, rx = txs.get(path.tx_id), rxs.get(path.rx_id)
+        if tx is None or rx is None:
+            continue
+        x = [tx.position[0]]
+        y = [tx.position[1]]
+        if path.kind == "reflected":
+            x.append(path.bounce_x_m)
+            y.append(path.bounce_y_m)
+        x.append(rx.position[0])
+        y.append(rx.position[1])
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=y,
+                mode="lines",
+                line={"width": 2, "dash": "dash" if path.kind == "reflected" else "solid"},
+                name=f"{path.kind} · {path.obstacle_id or 'direct'}",
+                hovertemplate=f"{path.kind} path<extra></extra>",
+                showlegend=bool(index == paths.index[0]),
+            )
+        )
+    import streamlit as st
+
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def _add_placement_lattice(fig: go.Figure, scenario: Scenario) -> None:

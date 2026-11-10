@@ -473,20 +473,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ns3"
-version = "3.44.post0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cppyy" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/28/14/f73051b24644dda262cd6c6754a6b04ebfb3d5a0efccf1d9ebf07888ded7/ns3-3.44.post0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:7c10adec6be54d91658c00989fd1df5c54916fecc2a42b02d7fdf9d129d69d8a", size = 69155414, upload-time = "2025-03-28T18:31:49.023Z" },
-    { url = "https://files.pythonhosted.org/packages/6d/ef/bf334e536cad631e9f29b445231a55c024f915199976c6a30c541378ffc4/ns3-3.44.post0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:2a98479a4a3a1bb819b95ce061871a9d068268b42351b8f0ef598160939ba7ce", size = 69153039, upload-time = "2025-03-28T18:33:39.328Z" },
-    { url = "https://files.pythonhosted.org/packages/f7/f8/bb348a084d126d17f99cb79fc6c65ddd6843f35f36ba3d79db51def762aa/ns3-3.44.post0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:4d24fd23c9a2bfdb0ee158599c555e10ffdda37c09988c0b4efb577b3445c15b", size = 69153866, upload-time = "2025-03-28T18:35:08.19Z" },
-    { url = "https://files.pythonhosted.org/packages/99/7d/475daab3a5ac5cd207a428537e51f9a96e7318e86146cc1d3bdb1443540f/ns3-3.44.post0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:897bda8ce579a05f17dde77ebde311b5177761db8d73cb53b1ed0e1e4f33da28", size = 69153186, upload-time = "2025-03-28T18:36:54.052Z" },
-]
-
-[[package]]
 name = "numpy"
 version = "2.2.6"
 source = { registry = "https://pypi.org/simple" }
@@ -840,7 +826,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cppyy" },
-    { name = "ns3" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -860,7 +845,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cppyy", specifier = "==3.5.0" },
-    { name = "ns3", specifier = "==3.44.post0" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "pandas", specifier = ">=2.2,<3" },
     { name = "plotly", specifier = ">=6,<7" },
