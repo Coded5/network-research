@@ -5,10 +5,9 @@ build-backend = "hatchling.build"
 [project]
 name = "propagation-lab"
 version = "0.1.0"
-description = "Static wireless signal propagation experiments powered by ns-3"
+description = "Static wireless signal propagation experiments powered by OMNeT++ and INET"
 requires-python = ">=3.10,<3.14"
 dependencies = [
-  "cppyy==3.5.0",
   "numpy>=1.26,<3",
   "pandas>=2.2,<3",
   "plotly>=6,<7",
@@ -24,7 +23,7 @@ propagation-lab = "propagation_lab.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: evaluates real ns-3 C++ propagation models"]
+markers = ["integration: evaluates real OMNeT++/INET C++ propagation models"]
 
 [tool.ruff]
 line-length = 100

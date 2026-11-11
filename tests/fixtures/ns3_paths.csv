@@ -1,0 +1,8 @@
+# Captured ns-3 3.44 output for scenarios/reflection.json; provenance in ns3_links.csv.
+model,tx_id,rx_id,kind,obstacle_id,distance_m,rx_power_dbm,reflection_loss_db,transmission_loss_db,bounce_x_m,bounce_y_m,bounce_z_m
+friis,tx_1,rx_1,reflected,mirror,17.88854381999832,-48.10350783931456,3.0,0.0,10.0,2.0,1.5
+friis,tx_1,rx_2,direct,,4.47213595499958,-33.06230801275531,0.0,0.0,,,
+friis,tx_1,rx_2,reflected,mirror,12.16552506059644,-44.75462521006507,3.0,0.0,2.6666666666666665,2.0,1.5
+log_distance,tx_1,rx_1,reflected,mirror,17.88854381999832,-67.25494967479858,3.0,0.0,10.0,2.0,1.5
+log_distance,tx_1,rx_2,direct,,4.47213595499958,-46.19314993495972,0.0,0.0,,,
+log_distance,tx_1,rx_2,reflected,mirror,12.16552506059644,-62.231625730924364,3.0,0.0,2.6666666666666665,2.0,1.5

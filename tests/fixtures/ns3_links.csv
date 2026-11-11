@@ -1,0 +1,8 @@
+# Captured ns-3 3.44 output for scenarios/reflection.json on feat/radio-prop (3a05ed0).
+# ns-3 commit: 43dce6710b8df69685e3479c1d33a571dda714ea
+# Custom source SHA256: 59dc2a4c9dac555f00d032b0c46fd1cedec4dc40689b23656bc88c23855b6db4
+model,tx_id,rx_id,distance_m,rx_power_dbm,path_loss_db,link_margin_db,status,path_count
+friis,tx_1,rx_1,16.0,-48.10350783931456,68.10350783931456,41.89649216068544,reflected,1
+friis,tx_1,rx_2,4.47213595499958,-32.777701676561456,52.777701676561456,57.222298323438544,direct+reflected,2
+log_distance,tx_1,rx_1,16.0,-67.25494967479858,87.25494967479858,22.74505032520142,reflected,1
+log_distance,tx_1,rx_2,4.47213595499958,-46.08634640390915,66.08634640390915,43.91365359609085,direct+reflected,2

@@ -1,1 +1,1 @@
-"""Static RSS and path-loss experiments using ns-3."""
+"""Static RSS and path-loss experiments using OMNeT++ and INET."""

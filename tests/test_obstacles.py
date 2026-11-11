@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from propagation_lab.engine import run_isolated
-from propagation_lab.ns3_adapter import Ns3Adapter
+from propagation_lab.omnet_adapter import OmnetAdapter
 from propagation_lab.scenario import Friis, Obstacle, Scenario, Transmitter, default_scenario
 
 
@@ -77,7 +77,7 @@ def test_obstacle_ids_material_bounds_map_and_budget():
 
 @pytest.fixture(scope="module")
 def adapter():
-    instance = Ns3Adapter(123)
+    instance = OmnetAdapter(123)
     yield instance
     instance.close()
 

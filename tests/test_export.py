@@ -19,7 +19,8 @@ def stored_result():
     scenario = Scenario(transmitters=[Transmitter(id="tx_1", position=(0, 0, 10))])
     return SimulationResult(
         scenario,
-        {"ns3_version": "3.44.post0", "models": {"friis": {}}, "seed": 42},
+        {"omnetpp_version": "6.2.0", "inet_version": "4.6.0",
+         "models": {"friis": {}}, "seed": 42},
         pd.DataFrame(
             [("friis", "tx_1", 0, 0, 1.5, 8.5, -40, 60)], columns=COVERAGE_COLUMNS
         ),

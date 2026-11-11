@@ -3,7 +3,7 @@ import math
 import pytest
 
 from propagation_lab.engine import run, run_isolated
-from propagation_lab.ns3_adapter import Ns3Adapter
+from propagation_lab.omnet_adapter import OmnetAdapter
 from propagation_lab.scenario import Friis, LogDistance, Receiver, Scenario, Transmitter
 
 pytestmark = pytest.mark.integration
@@ -11,7 +11,7 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture(scope="session")
 def adapter():
-    instance = Ns3Adapter(42)
+    instance = OmnetAdapter(42)
     yield instance
     instance.close()
 
@@ -26,9 +26,13 @@ def small_scenario():
     )
 
 
-def test_friis_matches_free_space_reference_and_parameter_effects(adapter):
+def test_actual_omnet_inet_friis_matches_free_space_reference_and_parameter_effects(adapter):
     tx = Transmitter(id="tx", position=(0, 0, 1), frequency_hz=2.4e9)
-    power_at, _ = adapter.channel(tx, Friis())
+    power_at, attributes = adapter.channel(tx, Friis())
+    assert attributes["Implementation"] == "inet::physicallayer::FreeSpacePathLoss"
+    assert attributes["Frequency"] == tx.frequency_hz
+    assert attributes["SystemLoss"] == 1
+    assert attributes["Alpha"] == 2
     expected = 20 * math.log10(299792458 / (4 * math.pi * 100 * 2.4e9))
     baseline = power_at((100, 0, 1))
     assert baseline == pytest.approx(20 + expected, abs=1e-6)

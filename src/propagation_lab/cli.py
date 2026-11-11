@@ -1,4 +1,4 @@
-"""Run a saved scenario or verify the pinned ns-3 binding from a terminal."""
+"""Run a saved scenario or verify the compiled OMNeT++/INET model from a terminal."""
 
 import argparse
 import math
@@ -20,7 +20,7 @@ def main():
     )
     parser.add_argument("--compare", action="store_true", help="Also evaluate the other loss model")
     parser.add_argument(
-        "--smoke", action="store_true", help="Check real ns-3 Friis against a reference"
+        "--smoke", action="store_true", help="Check real INET Friis against a reference"
     )
     args = parser.parse_args()
     try:
@@ -35,13 +35,14 @@ def main():
         else:
             scenario = default_scenario()
         result = run_isolated(scenario, compare=args.compare)
-        print(f"ns-3 {result.metadata['ns3_version']} · static propagation model evaluation")
+        print(f"OMNeT++ {result.metadata['omnetpp_version']} / INET "
+              f"{result.metadata['inet_version']} · static propagation model evaluation")
         print(result.links.to_string(index=False))
         if args.smoke:
             reference = 20 - 20 * math.log10(4 * math.pi * 100 * 2.4e9 / 299792458)
             actual = result.links.iloc[0].rx_power_dbm
             if abs(actual - reference) > 1e-6:
-                raise RuntimeError(f"Friis mismatch: ns-3 {actual}, reference {reference}")
+                raise RuntimeError(f"Friis mismatch: INET {actual}, reference {reference}")
             print(f"Friis reference passed (tolerance 1e-6 dB): {actual:.9f} dBm")
         else:
             output = args.output or Path("results") / datetime.now(timezone.utc).strftime(

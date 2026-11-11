@@ -1,22 +1,22 @@
-.PHONY: all env ns3 smoke run test lint
+.PHONY: all env omnet smoke run test lint
 
 JOBS ?= 2
 
-all: ns3
+all: omnet
 
 env:
 	uv sync --extra dev --locked
 
-ns3: env
-	.venv/bin/python scripts/build_ns3.py --jobs $(JOBS)
+omnet: env
+	.venv/bin/python scripts/build_omnet.py --jobs $(JOBS)
 
-smoke: ns3
+smoke: omnet
 	.venv/bin/propagation-lab --smoke
 
-run: ns3
+run: omnet
 	.venv/bin/streamlit run app.py
 
-test: ns3
+test: omnet
 	.venv/bin/python -m pytest
 
 lint: env

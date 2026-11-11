@@ -6,5 +6,6 @@ __pycache__/
 .playwright-mcp/
 results/
 vendor/
+build/
 core
 core.*

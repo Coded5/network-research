@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from propagation_lab.ns3_adapter import Ns3Adapter
+from propagation_lab.omnet_adapter import OmnetAdapter
 from propagation_lab.scenario import Friis, LogDistance, Scenario
 
 COVERAGE_COLUMNS = [
@@ -54,7 +54,7 @@ def run(scenario: Scenario, compare: bool = False) -> SimulationResult:
     if compare:
         models.append(LogDistance() if isinstance(scenario.propagation, Friis) else Friis())
     coverage, links, curves, path_rows, model_metadata = [], [], [], [], {}
-    adapter = Ns3Adapter(scenario.simulation.seed)
+    adapter = OmnetAdapter(scenario.simulation.seed)
     try:
         for propagation in models:
             model_name = propagation.model
@@ -108,8 +108,9 @@ def run(scenario: Scenario, compare: bool = False) -> SimulationResult:
             }
         metadata = {
             "application_version": "0.1.0",
-            "ns3_version": adapter.version,
-            "cppyy_version": adapter.cppyy_version,
+            "backend": "omnetpp_inet",
+            "omnetpp_version": adapter.version,
+            "inet_version": adapter.inet_version,
             "native_build": adapter.build_info,
             "selected_model": scenario.propagation.model,
             "models": model_metadata,
@@ -120,7 +121,7 @@ def run(scenario: Scenario, compare: bool = False) -> SimulationResult:
                 else "static_propagation_model_evaluation"
             ),
             "obstacle_model": {
-                "type": "ns3::ObstaclePropagationLossModel",
+                "type": "propagationlab::ObstaclePropagation",
                 "reflection_order": 1,
                 "combination": "incoherent power sum within each transmitter only",
                 "transmission": "fixed dB per object per straight path leg",
@@ -136,8 +137,8 @@ def run(scenario: Scenario, compare: bool = False) -> SimulationResult:
                 "Duration and seed do not affect these stationary deterministic models.",
                 "Maximum RSS is not combined RF power.",
                 "Log-distance reference loss is explicit, not inferred from frequency.",
-                "Friis MinLoss is 0 dB; near-field values are not physically reliable.",
-                "ns-3 3.44 log-distance applies reference loss at/below reference distance.",
+                "INET Friis gain is capped at 1; near-field values are not physically reliable.",
+                "Calibrated log-distance applies reference loss at/below reference distance.",
                 "Obstacle paths use total 3D length; "
                 "no diffraction, phase, roof or ground reflection.",
                 "No path is zero received power (-inf dBm); positive infinite loss is intentional.",
@@ -172,8 +173,8 @@ def run_isolated(scenario: Scenario, compare: bool = False) -> SimulationResult:
             raise RuntimeError("Simulation exceeded 180 seconds; increase grid spacing") from exc
         if process.returncode != 0:
             raise RuntimeError(
-                f"ns-3 worker failed (exit {process.returncode}). Check the pinned environment "
-                f"and compiler headers described in README.md.\n{process.stderr[-4000:]}"
+                f"OMNeT++/INET worker failed (exit {process.returncode}). Run make omnet "
+                f"and check README.md.\n{process.stderr[-4000:]}"
             )
         # Only deserialize our own worker's output in this private temporary directory.
         return pickle.loads(target.read_bytes())

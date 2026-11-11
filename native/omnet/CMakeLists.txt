@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.18)
+project(propagation_lab_omnet LANGUAGES CXX)
+
+set(OMNETPP_ROOT "" CACHE PATH "OMNeT++ installation")
+set(INET_ROOT "" CACHE PATH "INET source/build root")
+if(NOT OMNETPP_ROOT OR NOT INET_ROOT)
+  message(FATAL_ERROR "Set OMNETPP_ROOT and INET_ROOT")
+endif()
+
+file(GLOB OMNETPP_LIBRARY_DIRS "${OMNETPP_ROOT}/lib/*")
+find_library(OPPSIM_LIBRARY oppsim HINTS "${OMNETPP_ROOT}/lib" ${OMNETPP_LIBRARY_DIRS} REQUIRED)
+find_library(OPPCOMMON_LIBRARY oppcommon HINTS "${OMNETPP_ROOT}/lib" ${OMNETPP_LIBRARY_DIRS} REQUIRED)
+find_library(INET_LIBRARY INET HINTS "${INET_ROOT}/src" REQUIRED)
+
+add_library(propagation_lab_omnet SHARED CalibratedPathLoss.cc PropagationLab.cc)
+set_target_properties(propagation_lab_omnet PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
+target_compile_features(propagation_lab_omnet PRIVATE cxx_std_17)
+target_include_directories(propagation_lab_omnet PRIVATE "${OMNETPP_ROOT}/include" "${INET_ROOT}/src")
+target_link_libraries(propagation_lab_omnet PRIVATE "${INET_LIBRARY}" "${OPPSIM_LIBRARY}" "${OPPCOMMON_LIBRARY}")
+set_target_properties(propagation_lab_omnet PROPERTIES BUILD_RPATH "${OMNETPP_ROOT}/lib;${INET_ROOT}/src" INSTALL_RPATH "${OMNETPP_ROOT}/lib;${INET_ROOT}/src")
